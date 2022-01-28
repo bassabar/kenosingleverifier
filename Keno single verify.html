@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>Keno single verify</title>
+  <link rel="stylesheet" href="./css/main.css">
+  <link rel="stylesheet" href="./css/bootstrap/css/bootstrap.min.css">
+  <script src="./js/vue.min.js"></script>
+  <script src="./js/crypto-js.js"></script>
+  <script src="./js/tools.js"></script>
+</head>
+<body>
+  
+<div id="app" class="main">
+  <h1 class="text-center pb-5">Keno single verify</h1> 
+ <hr>
+  <form class="py-5">
+    <h2 class="text-center">Input</h2>
+    <div class="form-group">
+        <h5>Enter your client seed</h5>
+      <input :value="client_seed" @change="client_seed = $event.target.value" class="form-control" placeholder="Client Seed">
+    </div>
+    <div class="form-group">
+        <h5>Enter your server seed</h5>
+      <input   :value="server_seed" @change="server_seed = $event.target.value" class="form-control" placeholder="Server Seed">
+    </div>
+    
+    <div class="form-group">
+        <h5>Enter your nonce</h5>
+      <input  :value="nonce" @change="nonce = $event.target.value" class="form-control" placeholder="Nonce">
+    </div>
+  </form>
+  <hr>
+  <form class="py-5">
+    <h2 class="text-center pb-5">Output</h2>
+    <div class="form-group">
+      <label>sha256(server_seed)</label>
+      <input  class="form-control" readonly :value="sha256(server_seed)">
+    </div>
+    <div class="form-group">
+      <label>hmac_sha256(client_seed:nonce, server_seed)</label>
+      <input  class="form-control" readonly :value="result_hash">
+    </div>
+  </form>
+    <hr>
+  <form class="py-5">
+    <h2 class="text-center pb-5">Results</h2>
+    <h5>Numbers hit</h5>
+    <input  class="form-control" readonly :value="gameResult">
+  </form>
+</div>
+</body>
+
+<script>
+let qs = tools.queryString();
+var app = new Vue({
+  el: '#app',
+  data: {
+    /** inputs */
+    client_seed: qs.c || '',
+    server_seed: qs.s || '',
+    server_seed_hash: qs.h || '',
+    nonce: parseInt(qs.n) || 0,
+  },
+  computed: {
+    result_hash () {
+      return this.hmac_sha256(this.client_seed + ':' + this.nonce, this.server_seed);
+    },
+    result_hash_list () {
+      return String(this.result_hash)
+    },
+    gameResult () {
+      let hash = this.result_hash_list;
+      console.log( "result =>", keno(hash).map((item) => item.num).join(","));
+      let kenonumbers = keno(hash).map((item) => item.num).join(",");
+      console.log( "kenonumbers = ", kenonumbers);
+      return kenonumbers; 
+    }
+  },
+  watch: {
+    'this.gameResult'() {
+      ga('send', 'event', 'Limbo', 'verify', this.server_seed, {metric0: this.client_seed, metric1: this.nonce})
+    }
+  },
+  created () {
+    console.log("resulthash =>", this.result_hash_list)
+
+  },
+  methods: {
+    hmac_sha256 (msg, salt) {
+      return CryptoJS.HmacSHA256(msg, salt);
+    },
+    sha512 (value) {
+      return CryptoJS.SHA512(CryptoJS.enc.Utf8.parse(value));
+    },
+    parseInt (value) {
+      return window.parseInt(value, 16);
+    },
+    sha256 (value) {
+      return CryptoJS.SHA256(CryptoJS.enc.Utf8.parse(value));
+    },
+  }
+});
+
+
+
+
+
+
+
+
+function createNums(allNums, hash) {
+  const nums = [];
+  let h = CryptoJS.SHA256(hash).toString(CryptoJS.enc.Hex);
+  allNums.forEach((c) => {
+    nums.push({ num: c, hash: h });
+    h = h.substring(1) + h.charAt(0);
+  });
+  nums.sort(function (o1, o2) {
+    if (o1.hash < o2.hash) {
+      return -1;
+    } else if (o1.hash === o2.hash) {
+      return 0;
+    } else {
+      return 1;
+    }
+  });
+  return nums;
+}
+function keno(hash) {
+  const allNums = [
+    1, 30, 11, 40, 2, 29, 12, 39, 3,
+    28, 13, 38, 4, 27, 14, 37, 5, 26,
+    15, 36, 6, 25, 16, 35, 7, 24, 17,
+    34, 8, 23, 18, 33, 9, 22, 19, 32,
+    10, 21, 20, 31
+  ];
+  
+  const seed = String(CryptoJS.SHA256(hash));
+  let finalNums = createNums(allNums, hash);
+  finalNums = createNums(finalNums, seed);
+  return finalNums.slice(0, 10).map((m) => m.num);
+}
+</script>
+</html>
